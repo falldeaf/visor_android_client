@@ -26,4 +26,12 @@ function onDeviceReady() {
 
     console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
     document.getElementById('deviceready').classList.add('ready');
+
+    /*
+    window.SchedulerPlugin.configure(
+        fetchTask,
+        errorHandler,
+        { minimumFetchInterval: i }  // i in minutes
+    );
+    */
 }
