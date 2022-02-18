@@ -1,37 +1,100 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
-// Wait for the deviceready event before using any of Cordova's device APIs.
-// See https://cordova.apache.org/docs/en/latest/cordova/events/events.html#deviceready
 document.addEventListener('deviceready', onDeviceReady, false);
 
+let push_id_array = []; //store latest pushes
+
 function onDeviceReady() {
-    // Cordova is now initialized. Have fun!
+	console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
+	document.getElementById('deviceready').classList.add('ready');
 
-    console.log('Running cordova-' + cordova.platformId + '@' + cordova.version);
-    document.getElementById('deviceready').classList.add('ready');
+	cordova.plugins.notification.local.hasPermission(checkNotificationPermissions);
 
-    /*
-    window.SchedulerPlugin.configure(
-        fetchTask,
-        errorHandler,
-        { minimumFetchInterval: i }  // i in minutes
-    );
-    */
+	function checkNotificationPermissions(granted) {
+		if(granted) {
+			//sendNotification("Notifications", "notifications ready!");
+		} else {
+			cordova.plugins.notification.local.requestPermission(function (granted) {
+				if(granted) {
+					//sendNotification("Notifications", "notifications granted permissions!");
+				}
+			});
+		}
+	}
+
+	function sendNotification(title, message) {
+		cordova.plugins.notification.local.schedule({
+			title: title,
+			text: message,
+			foreground: true
+		});
+	}
+
+	//Start the notification service
+	(async ()=>{
+		console.log("Start notification service");
+		var BackgroundFetch = window.BackgroundFetch;
+
+		var onEvent = async function(task_id) {
+			var d = new Date();
+			console.log(`[BackgroundFetch] ${task_id} event received at | ${d.getMinutes()}:${d.getSeconds()}`);
+			await getLatestPushes();
+			BackgroundFetch.finish(task_id);
+		};
+	
+		var onTimeout = async function(task_id) {
+			console.log('[BackgroundFetch] TIMEOUT: ', task_id);
+			BackgroundFetch.finish(task_id);
+		};
+	
+		var status = await BackgroundFetch.configure({	//delay: 5000,
+														forceAlarmManager: true,
+														stopOnTerminate: false,
+														startOnBoot: true,
+														minimumFetchInterval: 1
+													},
+														onEvent,
+														onTimeout);
+		console.log('[BackgroundFetch] configure status: ', status);
+
+		/*BackgroundFetch.scheduleTask({
+			taskId: 'cordova-background-fetch',
+			delay: 5000,       // milliseconds
+			forceAlarmManager: true,
+			stopOnTerminate: false,
+			startOnBoot: true,
+			periodic: false
+		});*/
+	})();
+
+	async function getLatestPushes(task_id) {
+		document.querySelector('#json_log').innerHTML = "Calling for json";
+		try{
+			const response = await fetch(`https://falldeaf.xyz/getpushes/HVaMfGkqxUUx7JMQ5QK5uQ2RrXxN4fLxwLwbwCzd/latest`);
+			document.querySelector('#json_log').innerHTML = response.responseText;
+			const pushes = await response.json();
+			for (const push of pushes) {
+				if(!push_id_array.includes(push._id)) {
+					switch(push.type) {
+						case "message":
+							//sendNotif(push.title, push.message);
+							sendNotification(push.title, push.message);
+							break;
+						case "command":
+							runCommand(push);
+							break;
+					}
+					console.log("New push! : " + push.message);
+					
+					push_id_array.push(push._id);
+					if(push_id_array.length > 50) push_id_array.pop();
+				}
+			}
+		}
+		catch (e) {
+			document.querySelector('#json_log').innerHTML = response.responseText;
+			console.log(e)
+		}
+	}
+
+	document.querySelector('#json_log').innerHTML = "JSON Here";
+	//window.setInterval(getLatestPushes, 4000);
 }
